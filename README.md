@@ -1,93 +1,149 @@
-# Zero Traffic Detection Automation (LTE / NR)
+# Daily KPI Automation — Zero Traffic Detection (LTE / NR)
 
-## Overview
-This project automates zero-traffic detection for LTE/NR cells using Python.  
-It processes daily KPI data, applies business rules to identify zero-traffic cells, generates summary reports, and stores the processed results in both Excel and MySQL for further analysis.
-
----
-
-## Key Features
-- Automated detection of zero-traffic NR cells
-- Business-rule based filtering using traffic hours, traffic volume, and cell state
-- Consolidation of online and newly detected zero-traffic cells
-- Summary and historical zero-traffic analysis
-- Excel report generation
-- MySQL database storage using SQLAlchemy
+> **Built and used in production at Ericsson India**  
+> Python · MySQL · pandas · SQLAlchemy · openpyxl
 
 ---
 
-## Technologies Used
-- Python
-- Pandas
-- SQLAlchemy
-- MySQL
-- Excel (openpyxl)
+## The Problem This Solves
+
+Every morning, the network operations team had to manually go through large KPI Excel files to find which LTE/NR cells had zero traffic — a process that took around **4 hours** and was done entirely by hand.
+
+The problem with doing it manually:
+- It took up the first half of every working day
+- Human error meant some zero-traffic cells were missed or wrongly flagged
+- There was no history — if someone asked "how many times has this cell been zero-traffic this month?", there was no easy answer
+- The report had to be prepared and distributed by a specific person each morning — a single point of failure
+
+This script eliminates all of that.
 
 ---
 
-## Input Files
-Configured through `config.json`:
+## What It Does
 
-- please access the input files from drive link attached
-  https://drive.google.com/drive/folders/1Y4I8nlI1w8makIy5cD4ootJW68-cD3cZ?usp=sharing
+Runs once each day. Takes the raw KPI files as input. Produces a validated, structured Excel report and stores everything in MySQL — in under 5 minutes.
 
----
-
-## Processing Logic
-1. Load raw KPI and reference data
-2. Convert numeric and date fields
-3. Filter cells where:
-   - Latest date
-   - No_of_Hours = 4
-   - NR_Traffic = 0
-   - administrativeState = UNLOCKED
-   - operationalState = ENABLED
-4. Build structured output dataset
-5. Enrich data with availability and engineer mapping
-6. Merge with online cell data
-7. Generate summary and zero-traffic day count
+```
+Raw KPI Files (Excel / CSV)
+        ↓
+Load & parse data
+        ↓
+Apply business rules → identify zero-traffic cells
+        ↓
+Enrich with engineer mapping & availability data
+        ↓
+Merge with online cell records
+        ↓
+Generate structured Excel report  →  Operations team
+        ↓
+Store results in MySQL             →  Historical tracking
+```
 
 ---
 
-## SQL Integration
-The automation stores processed KPI data into a MySQL database using SQLAlchemy.  
-The database is created automatically for local usage.
+## Business Rules Applied
 
-### Tables Created
-- consol_non_consol – consolidated zero-traffic and online cell data
-- summary – UPC-wise zero-traffic summary
-- no_of_days_zerotraffic – cell-wise zero-traffic day count
+A cell is flagged as zero-traffic only when **all** of the following are true — this prevents false positives from cells that are legitimately offline:
 
-This allows reuse of processed data for reporting and analysis.
+| Condition | Value | Why It Matters |
+|---|---|---|
+| Date | Latest date only | Avoid flagging old resolved issues |
+| Traffic hours monitored | = 4 hours | Sufficient observation window |
+| NR traffic volume | = 0 | Actual zero traffic, not missing data |
+| Administrative state | UNLOCKED | Cell is supposed to be active |
+| Operational state | ENABLED | Cell is not in maintenance |
+
+Only cells that fail all five checks together are flagged — filtering out noise and reducing false escalations.
+
+---
+
+## Key Results
+
+- **4 hours → under 5 minutes** — daily reporting effort reduced by 98%
+- Zero-traffic cells that previously went undetected for days are now caught and escalated **same day**
+- Operations team can now query history: *"How many times has this cell had zero traffic this month?"* — previously impossible
+- Report is generated and ready automatically — no dependency on any individual to prepare or send it
 
 ---
 
 ## Output
-- Excel file with consolidated data, summary, and zero-traffic day count
-- MySQL tables containing processed KPI results
+
+**Excel Report** — 3 sheets:
+- `Consolidated` — all zero-traffic and online cells with full attributes
+- `Summary` — aggregated view by UPC (network unit)
+- `Zero Traffic Days` — per-cell count of zero-traffic occurrences over time
+
+**MySQL Database** — 3 tables:
+- `consol_non_consol` — consolidated cell data (zero-traffic + online)
+- `summary` — UPC-level summary for management reporting
+- `no_of_days_zerotraffic` — historical zero-traffic day count per cell
+
+The MySQL tables enable trend analysis and historical queries that the Excel-only process never could.
 
 ---
 
-## Configuration
-All file paths and parameters are managed through `config.json`.
+## Tech Stack
+
+| Tool | What It Does in This Project |
+|---|---|
+| Python (pandas) | Loads and processes raw KPI files, applies business rule filters |
+| openpyxl | Reads input Excel files, writes structured multi-sheet output reports |
+| SQLAlchemy | Connects to MySQL and auto-creates tables — no manual DDL required |
+| MySQL | Stores validated results for historical tracking and downstream queries |
+| config.json | Manages all file paths and parameters — no hardcoding in the script |
 
 ---
 
 ## How to Run
-1. Update `config.json` with required paths
-2. Ensure MySQL is running locally
-3. Install required Python packages
-4. Run the script:
+
+**1. Configure paths**
+
+Update `config.json` with your file locations:
+```json
+{
+  "kpi_file": "path/to/daily_kpi.xlsx",
+  "reference_file": "path/to/cell_reference.xlsx",
+  "output_path": "path/to/output/",
+  "db_host": "localhost",
+  "db_name": "telecom_kpi"
+}
+```
+
+**2. Install dependencies**
+```bash
+pip install pandas openpyxl sqlalchemy mysql-connector-python
+```
+
+**3. Run**
 ```bash
 python zero_traffic_automation.py
+```
 
+The script creates the MySQL database and tables automatically on first run.
 
-Use Case
-Telecom network operations
-Zero-traffic validation during site cutovers
-Daily health check automation
-Performance monitoring and KPI reporting
+**Sample input files** are available here:  
+[Google Drive — Sample KPI Files](https://drive.google.com/drive/folders/1Y4I8nlI1w8makIy5cD4ootJW68-cD3cZ?usp=sharing)
 
+---
 
-Author
-Vishwanath Malli
+## Repository Structure
+
+```
+Telecommunication-Network-KPI-Automation-Python-SQL/
+├── zero_traffic_automation.py   # Main script
+├── config.json                  # File paths and DB config
+├── requirements.txt             # Python dependencies
+└── README.md
+```
+
+---
+
+## Context
+
+This project was built to solve a real operational problem. The detection logic, business rules, and output format were developed by working directly with the network optimization and operations teams to match their actual escalation workflows. Because of data confidentiality, the raw data is replaced with imagined data.
+
+It is the same automation referenced in my [resume](https://github.com/VishwanathMalli) under professional experience.
+
+---
+
+*Built by Vishwanath Malli 
