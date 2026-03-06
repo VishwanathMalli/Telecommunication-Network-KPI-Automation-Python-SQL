@@ -1,6 +1,6 @@
 # Daily KPI Automation — Zero Traffic Detection (LTE / NR)
 
-> **Built and used in production at Ericsson India**  
+> **Built and used in production level**  
 > Python · MySQL · pandas · SQLAlchemy · openpyxl
 
 ---
